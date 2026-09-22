@@ -1,0 +1,150 @@
+# =============================================================================
+# Sample automations for ha-rule-analyzer (T03)
+#
+# These are deliberately SEEDED with each of the 5 conflict types the analyzer
+# must detect. They double as:
+#   (a) something to paste into Home Assistant's automations.yaml to see it run,
+#   (b) the first hand-labeled fixtures for the detector test suite + corpus.
+#
+# Each block is tagged  # >>> TYPE: <conflict type> | entities: <shared state>
+# so the ground-truth label is attached to the fixture from day one.
+# Entity ids are invented; wire them to real/demo entities as needed.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# >>> TYPE: direct action conflict | shared state: living-room climate vs window
+# Canonical motivating example (matches the Error Log seed row): on a cold,
+# stuffy morning BOTH fire — heater ON while window is OPEN.
+# -----------------------------------------------------------------------------
+- id: heat_when_cold
+  alias: "Heat when cold"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.living_room_temp
+      below: 18
+  action:
+    - service: climate.turn_on
+      target: { entity_id: climate.living_room }
+
+- id: vent_when_stuffy
+  alias: "Vent when stuffy"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.living_room_co2
+      above: 1000
+  action:
+    - service: cover.open_cover
+      target: { entity_id: cover.living_room_window }
+
+# -----------------------------------------------------------------------------
+# >>> TYPE: redundancy | shared state: light.porch
+# Two automations do the same thing on the same trigger; one is redundant.
+# -----------------------------------------------------------------------------
+- id: porch_on_at_sunset
+  alias: "Porch light on at sunset"
+  trigger:
+    - platform: sun
+      event: sunset
+  action:
+    - service: light.turn_on
+      target: { entity_id: light.porch }
+
+- id: porch_on_when_dark
+  alias: "Porch light on when dark"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.outdoor_lux
+      below: 10
+  action:
+    - service: light.turn_on
+      target: { entity_id: light.porch }
+
+# -----------------------------------------------------------------------------
+# >>> TYPE: unreachable | this rule can never fire
+# Starter version: internally-unsatisfiable condition (temp both <10 and >25).
+# Richer cross-rule version (a guard rule that always resets the trigger state)
+# is worth adding once the detector handles multi-rule reachability.
+# -----------------------------------------------------------------------------
+- id: impossible_frost_and_heat
+  alias: "Unreachable: frost-and-heatwave"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.motion_hallway
+      to: "on"
+  condition:
+    - condition: numeric_state
+      entity_id: sensor.living_room_temp
+      below: 10
+    - condition: numeric_state
+      entity_id: sensor.living_room_temp
+      above: 25
+  action:
+    - service: notify.mobile_app
+      data: { message: "This will never send." }
+
+# -----------------------------------------------------------------------------
+# >>> TYPE: loop | switch.a <-> switch.b trigger cycle
+# A turns on B; B turns on A. A shared-trigger cycle that never settles.
+# -----------------------------------------------------------------------------
+- id: loop_a_triggers_b
+  alias: "Loop A: a on -> b on"
+  trigger:
+    - platform: state
+      entity_id: switch.a
+      to: "on"
+  action:
+    - service: switch.turn_on
+      target: { entity_id: switch.b }
+
+- id: loop_b_triggers_a
+  alias: "Loop B: b on -> a on"
+  trigger:
+    - platform: state
+      entity_id: switch.b
+      to: "on"
+  action:
+    - service: switch.turn_on
+      target: { entity_id: switch.a }
+
+# -----------------------------------------------------------------------------
+# >>> TYPE: shadowing | shared trigger: binary_sensor.motion_kitchen
+# Both fire on the same motion event. The earlier, unconditional rule turns the
+# light OFF; the later rule's intent (turn it on when dark) is always pre-empted.
+# -----------------------------------------------------------------------------
+- id: kitchen_motion_off_early
+  alias: "Kitchen motion (early, unconditional): light off"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.motion_kitchen
+      to: "on"
+  action:
+    - service: light.turn_off
+      target: { entity_id: light.kitchen }
+
+- id: kitchen_motion_on_late
+  alias: "Kitchen motion (late, when dark): light on"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.motion_kitchen
+      to: "on"
+  condition:
+    - condition: numeric_state
+      entity_id: sensor.kitchen_lux
+      below: 20
+  action:
+    - service: light.turn_on
+      target: { entity_id: light.kitchen }
+
+# -----------------------------------------------------------------------------
+# >>> TYPE: none (negative control) | should produce NO conflict
+# A clean, isolated automation — useful to confirm the detector's false-positive
+# rate. Touches an entity nothing else touches.
+# -----------------------------------------------------------------------------
+- id: garage_close_at_night
+  alias: "Close garage at 11pm"
+  trigger:
+    - platform: time
+      at: "23:00:00"
+  action:
+    - service: cover.close_cover
+      target: { entity_id: cover.garage }

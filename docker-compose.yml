@@ -1,0 +1,26 @@
+# Home Assistant — local test instance for ha-rule-analyzer (T03)
+#
+# Usage:
+#   docker compose up -d          # start HA in the background
+#   # open http://localhost:8123  and do the one-time onboarding
+#   docker compose logs -f        # watch logs
+#   docker compose down           # stop
+#
+# Config (including automations.yaml) is bind-mounted to ./ha-config so you
+# can edit automations on your host and have HA pick them up. That folder is
+# gitignored — it holds tokens/state you must never commit.
+
+services:
+  homeassistant:
+    container_name: ha-rule-analyzer-hass
+    image: ghcr.io/home-assistant/home-assistant:stable
+    volumes:
+      - ./ha-config:/config
+      # sample conflict automations are copied in on first run (see README_SETUP)
+      - /etc/localtime:/etc/localtime:ro
+    restart: unless-stopped
+    ports:
+      - "8123:8123"
+    # 'privileged' + host networking are common in HA guides for device
+    # discovery, but you do NOT need them for static-analysis testing.
+    # Keep this minimal and isolated.

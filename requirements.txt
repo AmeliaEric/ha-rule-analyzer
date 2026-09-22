@@ -1,0 +1,8 @@
+# ha-rule-analyzer — core dependencies (T02)
+# Versions below were installed together and verified compatible on 2026-09-21
+# (Python 3.12+). Pinned for reproducibility; bump deliberately.
+
+z3-solver==5.1.0.0     # SMT detection core
+ortools==9.15.6755     # CP-SAT cost-optimal repair
+PyYAML==6.0.3          # Home Assistant YAML parsing
+requests==2.33.1       # corpus scraper (GitHub API + forum)
